@@ -274,13 +274,17 @@ def write_classify_csv(l,f_hashtags_term_dict):
     tags=get_tags(l)
     tag = tags[0]
     tagValue = 0
+    b=False
     for t in tags:
-        if t in hashtags  and hashtags[t] > tagValue:
+        if  hashtags.has_key(t)  and hashtags[t] > tagValue:
+            b = True
             tag = t
-            tagValue = tags[t]
+            tagValue = hashtags[t]
+    if not b :
+        return
 
     for w in [x for x in tweetwords if x in term_dict]:
-        term_dict[w] = 'T'
+        b = True
     cfile.write("%s,%s\n" % (','.join([term_dict[x] for x in term_list]),tagValue))
     #f.write(','.join([term_dict[x] for x in term_list])+'\n')
 
@@ -288,14 +292,14 @@ def write_classify_csv(l,f_hashtags_term_dict):
 #    
 #idf is terms to 
 #for each term compute the number of classes that contain that term
-def computeidf(terms,class_count):
+def computeidf(terms,cl_count):
     idf = dict()
     for (term) in terms.keys():
         doccount = 1
-        for (c,termdict) in class_count.items():
+        for (c,termdict) in cl_count.items():
             if termdict.has_key(term):
                 doccount = doccount +1 
-        idf[term] = math.log(len(class_count)/(doccount))
+        idf[term] = math.log(float(len(cl_count))/(doccount))
     return idf
 
 #for each class get the tfidf values for each term in the class
@@ -310,7 +314,7 @@ def compute_ktfidf_terms(k,class_count,idf):
             ret.add(x)
     return ret
 
-twitterdir = './twitterdata/'
+twitterdir = './filtered/'
 hashtags = dict()
 
 if False:
@@ -330,8 +334,8 @@ for x in tags:
 
 
 
-filtered = '/home/phidesk/twitter/filtered/myout.json'
-filteredPath = '/home/phidesk/twitter/filtered/'
+filtered = '/home/phi/twitter/filtered/myout.json'
+filteredPath = '/home/phi/twitter/filtered/'
 
 if False:
     with open(filtered,'w') as f:
@@ -341,7 +345,7 @@ if False:
 print 'getting ready to corpus count'    
 corpus_count = dict()
 
-if True:
+if False:
     loop_tweets(term_count,corpus_count,filteredPath)
     print 'counted words in corpus'
     print "%d\n" % len(corpus_count)
@@ -355,13 +359,23 @@ c = sorted([(x,v) for (x,v) in corpus_count.items() if v < 4], key=itemgetter(1)
 for x in c:
     del corpus_count[x[0]]
 terms_set = set()
-if True: 
+if False: 
     cl_c = dict()
     loop_tweets(class_count,[cl_c,hashtags,corpus_count],filteredPath)
+    print 'looped tweets'
+    print len(cl_c)
+    print len(corpus_count) 
     
-    
-    
-        
+    with open('cl_count.dump','w') as tagsfile:
+        pickle.dump(cl_c,tagsfile)    
+       
+else:
+
+    with open('cl_count.dump') as tagsfile:
+        cl_c = pickle.load(tagsfile)
+     
+if False:
+     
     idf = computeidf(corpus_count,cl_c)
     terms_set= compute_ktfidf_terms(10,cl_c,idf)
     
@@ -370,8 +384,9 @@ if True:
 else:
     with open('kterms.dump') as tagsfile:
         terms_set = pickle.load(tagsfile)
-
-with open('/home/phidesk/twitter.csv','w') as cfile:
+print 'done k terms'
+   
+with open('/home/phi/twitter.csv','w') as cfile:
     res_list = [x for x in terms_set]
     cfile.write(','.join(res_list)+',hashtag\n')
     loop_tweets(write_classify_csv,[cfile,hashtags,res_list],filteredPath)
