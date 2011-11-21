@@ -201,7 +201,7 @@ def split_tweet(l):
     m = json.loads(l)
     text = str(m['text']).translate(table, punc)    
     #repattern.sub('', 
-    return [stemm.stem_word(x.lower()) for x in text.split() if not '#' in x and not x in stopwords]
+    return [stemm.stem_word(x.lower()) for x in text.split() if not '#' in x and not x in stopwords and not 'http' in x]
 
 def get_tags(l):
     m = json.loads(l)
@@ -213,7 +213,7 @@ def loop_tweets(function,state,path='./'):
     for dirname, dirnames, filenames in os.walk(path):
         if dirname == path:
             for filename in filenames:
-                if 'json' in filename:
+                if 'json' in filename :
                    
                     with open(path+filename) as f:
                         for l in f.xreadlines():
@@ -280,18 +280,55 @@ def write_classify_csv(l,f_hashtags_term_dict):
             b = True
             tag = t
             tagValue = hashtags[t]
+    
     if not b :
         return
+    b = False
 
-    for w in [x for x in tweetwords if x in term_dict]:
+    for w in [x for x in tweetwords if term_dict.has_key(x)]:
         b = True
-    cfile.write("%s,%s\n" % (','.join([term_dict[x] for x in term_list]),tagValue))
+        term_dict[w] ='T' 
+
+#    if not b :
+#        return
+    try:
+        cfile.write("%s,%s\n" % (','.join([term_dict[x] for x in term_list]),tag))
+    except:
+        print 'something terrible has happened'
     #f.write(','.join([term_dict[x] for x in term_list])+'\n')
 
 
 #    
 #idf is terms to 
 #for each term compute the number of classes that contain that term
+
+#compute mutual information
+#compute tweetTfidf
+
+#def compute_tweet_idf(terms,cl_count):
+#    idf = dict()
+#    for (term) in terms.keys():
+#        doccount = 1
+#        for (c,termdict) in cl_count.items():
+#            if termdict.has_key(term):
+#                doccount = doccount + termdict[term]
+#        idf[term] = math.log(float(len(cl_count))/(doccount))
+#    return idf
+
+#def compute_mutual_information_class_term(terms,cl_count):
+#    idf = dict()
+#    for (term) in terms.keys():
+#        doccount = 1
+#        for (c,termdict) in cl_count.items():
+#            if termdict.has_key(term):
+#                doccount = doccount + termdict[term]
+#        idf[term] = math.log(float(len(cl_count))/(doccount))
+#    return idf
+
+
+
+
+
 def computeidf(terms,cl_count):
     idf = dict()
     for (term) in terms.keys():
@@ -314,6 +351,56 @@ def compute_ktfidf_terms(k,class_count,idf):
             ret.add(x)
     return ret
 
+def compute_ktf(k,class_count):
+    ret = set()
+    for classname,termdict in class_count.items():
+        
+        topk = sorted([(term, termdict[term]) for term in termdict.keys()], key=itemgetter(1),reverse=True)
+
+        for x,y in topk[0:k]:
+            ret.add(x)
+    return ret
+
+
+
+def compute_global_tfidf(k,class_count,terms_count,idf):
+    retdict = dict()
+    ret = set()
+    for term in terms_count.keys():
+        for classname,termdict in class_count.items():
+            if termdict.has_key(term):
+                if retdict.has_key(term) :
+                    retdict[term] = retdict[term] + termdict[term]
+                else:
+                    retdict[term] = termdict[term]
+
+    topk = sorted([(term, retdict[term]*idf[term]) for term in retdict.keys()], key=itemgetter(1),reverse=True)
+
+    for x,y in topk[0:k]:
+        ret.add(x)
+    return ret
+
+
+def compute_positive_mutual_information(k,class_count,terms_count,hashtags):
+    ret = set()
+    for classname,termdict in class_count.items():
+        p_c = sum([y for x,y in termdict.items()]) 
+        mi_dict = dict()
+        for term,p_t in terms_count.items():
+            if termdict.has_key(term):
+                p_c_t = termdict[term]  
+                div = hashtags[classname]
+                mi_dict[term] = p_c_t/div*math.log((p_c_t + 1.0)/div /((1.0+ p_c)/div *(1.0+p_t)/div))
+
+        topk = sorted([(term, mi_dict[term]) for term in mi_dict.keys()], key=itemgetter(1),reverse=True)
+
+        for x,y in topk[0:k]:
+            ret.add(x)
+    return ret
+
+#term frequency
+
+
 twitterdir = './filtered/'
 hashtags = dict()
 
@@ -326,13 +413,16 @@ else:
     with open('tags_unfiltered.dump') as tagsfile:
         hashtags = pickle.load(tagsfile)
 
-tags = sorted([(x,v) for (x,v) in hashtags.items()], key=itemgetter(1))[:-50]
+tags = sorted([(x,v) for (x,v) in hashtags.items()], key=itemgetter(1))[:-100]
 print '%d\n' % len(hashtags) 
 
 for x in tags:
     del hashtags[x[0]]
 
 
+tags = sorted([(x,v) for (x,v) in hashtags.items()], key=itemgetter(1))[-80:]
+for x in tags:
+    del hashtags[x[0]]
 
 filtered = '/home/phi/twitter/filtered/myout.json'
 filteredPath = '/home/phi/twitter/filtered/'
@@ -355,7 +445,7 @@ else:
     with open('corpus_count_unfiltered.dump') as tagsfile:
         corpus_count=pickle.load(tagsfile)
 
-c = sorted([(x,v) for (x,v) in corpus_count.items() if v < 4], key=itemgetter(1))
+c = sorted([(x,v) for (x,v) in corpus_count.items() if v < 100], key=itemgetter(1))
 for x in c:
     del corpus_count[x[0]]
 terms_set = set()
@@ -373,20 +463,38 @@ else:
 
     with open('cl_count.dump') as tagsfile:
         cl_c = pickle.load(tagsfile)
-     
-if False:
-     
-    idf = computeidf(corpus_count,cl_c)
-    terms_set= compute_ktfidf_terms(10,cl_c,idf)
-    
-    with open('kterms.dump','w') as tagsfile:
+
+
+def classify_io(folder,i,hashtags,terms_set):
+    with open(folder + '%sterms.dump' % str(i),'w') as tagsfile:
         pickle.dump(terms_set,tagsfile)
-else:
-    with open('kterms.dump') as tagsfile:
-        terms_set = pickle.load(tagsfile)
-print 'done k terms'
-   
-with open('/home/phi/twitter.csv','w') as cfile:
-    res_list = [x for x in terms_set]
-    cfile.write(','.join(res_list)+',hashtag\n')
-    loop_tweets(write_classify_csv,[cfile,hashtags,res_list],filteredPath)
+       
+    with open(folder + '%s.csv' % str(i),'w') as cfile:
+        res_list = [x for x in terms_set]
+        cfile.write(','.join(res_list)+',hashtag\n')
+        loop_tweets(write_classify_csv,[cfile,hashtags,res_list],filteredPath)
+     
+
+idf = computeidf(corpus_count,cl_c)
+for i in range(1,25,5):     
+    #    if True:
+    try:     
+        print 'ktfidf'
+        terms_set= compute_ktfidf_terms(i,cl_c,idf)
+        classify_io("/home/phi/twitter/ktfidf/",i,hashtags,terms_set) 
+    
+        print 'ktf'
+        terms_set = compute_ktf(i,cl_c)
+        classify_io("/home/phi/twitter/ktf/",i,hashtags,terms_set) 
+            
+        print 'global tfidf'
+        terms_set = compute_global_tfidf(i*len(hashtags),cl_c,corpus_count,idf)
+        classify_io("/home/phi/twitter/global_tfidf/",i,hashtags,terms_set) 
+    
+        print 'mut inf'
+        terms_set = compute_positive_mutual_information(i,cl_c,corpus_count,hashtags)
+        classify_io("/home/phi/twitter/pos_mut_info/",i,hashtags,terms_set) 
+
+    except Exception, err:
+        print str(err)
+
