@@ -6,6 +6,7 @@ This temporary script file is located here:
 /home/phi/.spyder2/.temp.py
 """
 import json
+from scipy.stats import *
 import os
 import pickle
 from operator import itemgetter, attrgetter
@@ -198,12 +199,17 @@ yourselves""".translate(table,punc).split())
 
 
 def split_tweet(l):
+    if type(l) == list:
+        return l[0]
     m = json.loads(l)
     text = str(m['text']).translate(table, punc)    
     #repattern.sub('', 
-    return [stemm.stem_word(x.lower()) for x in text.split() if not '#' in x and not x in stopwords and not 'http' in x]
+    return set([stemm.stem_word(x.lower()) for x in text.split() if not '#' in x and not x in stopwords and not 'http' in x])
+
 
 def get_tags(l):
+    if type(l) == list:
+        return l[1]
     m = json.loads(l)
     return [x['text'].lower() for x in m['entities']['hashtags']]
 
@@ -225,6 +231,13 @@ def loop_tweets(function,state,path='./'):
                                 pass 
                             
          
+def loop_tweets_mem(mem,function,state):   
+    for l in mem:
+        function(l,state)
+
+def get_memory_tweets(l,tweet_list):
+    tweet_list.append([split_tweet(l),get_tags(l)])
+
 def get_hashtags(l,hashtags):
     
     for tag in get_tags(l):
@@ -242,6 +255,7 @@ def filter_hashtags(l,output_tags):
             b = True
     if b:
         output.write('%s\n' % l)
+
 def term_count(l,corpus_count):
     for w in split_tweet(l):
         if not corpus_count.has_key(w) :
@@ -296,35 +310,6 @@ def write_classify_csv(l,f_hashtags_term_dict):
     except:
         print 'something terrible has happened'
     #f.write(','.join([term_dict[x] for x in term_list])+'\n')
-
-
-#    
-#idf is terms to 
-#for each term compute the number of classes that contain that term
-
-#compute mutual information
-#compute tweetTfidf
-
-#def compute_tweet_idf(terms,cl_count):
-#    idf = dict()
-#    for (term) in terms.keys():
-#        doccount = 1
-#        for (c,termdict) in cl_count.items():
-#            if termdict.has_key(term):
-#                doccount = doccount + termdict[term]
-#        idf[term] = math.log(float(len(cl_count))/(doccount))
-#    return idf
-
-#def compute_mutual_information_class_term(terms,cl_count):
-#    idf = dict()
-#    for (term) in terms.keys():
-#        doccount = 1
-#        for (c,termdict) in cl_count.items():
-#            if termdict.has_key(term):
-#                doccount = doccount + termdict[term]
-#        idf[term] = math.log(float(len(cl_count))/(doccount))
-#    return idf
-
 
 
 
@@ -398,7 +383,96 @@ def compute_positive_mutual_information(k,class_count,terms_count,hashtags):
             ret.add(x)
     return ret
 
-#term frequency
+def compute_bns(k,class_count):
+    ret = set()
+    for classname,termdict in class_count.items():
+        mi_dict = dict()
+        for term,p_t in termdict.items():
+                rates = compute_tp_fp_tn_fn(classname,term,class_count)
+                tp = rates[0]
+                fp = rates[1]
+                tn = rates[2]
+                fn = rates[3]
+                tpr = tp/(tp+fn)
+                fpr = fp / (fp + tn)
+                mi_dict[term] = abs(norm.ppf(tpr)-norm.ppf(fpr))
+
+        topk = sorted([(term, mi_dict[term]) for term in mi_dict.keys()], key=itemgetter(1),reverse=True)
+
+        for x,y in topk[0:k]:
+            ret.add(x)
+
+    return ret
+
+def compute_acc2(k,class_count):
+    ret = set()
+    for classname,termdict in class_count.items():
+        mi_dict = dict()
+        for term,p_t in termdict.items():
+                rates = compute_tp_fp_tn_fn(classname,term,class_count)
+                tp = rates[0]
+                fp = rates[1]
+                tn = rates[2]
+                fn = rates[3]
+                tpr = tp/(tp+fn)
+                fpr = fp / (fp + tn)
+                mi_dict[term] = abs(tpr-fpr)
+
+        topk = sorted([(term, mi_dict[term]) for term in mi_dict.keys()], key=itemgetter(1),reverse=True)
+
+        for x,y in topk[0:k]:
+            ret.add(x)
+
+    return ret
+
+def compute_f1(k,class_count):
+    ret = set()
+    for classname,termdict in class_count.items():
+        mi_dict = dict()
+        for term,p_t in termdict.items():
+                rates = compute_tp_fp_tn_fn(classname,term,class_count)
+                tp = rates[0]
+                fp = rates[1]
+                tn = rates[2]
+                fn = rates[3]
+                tpr = tp/(tp+fn)
+                fpr = fp / (fp + tn)
+                mi_dict[term] = 2* tp /(tp + fn +tp +fp)
+        topk = sorted([(term, mi_dict[term]) for term in mi_dict.keys()], key=itemgetter(1),reverse=True)
+
+        for x,y in topk[0:k]:
+            ret.add(x)
+
+    return ret
+
+
+
+
+
+def compute_tp_fp_tn_fn(tag,word,class_count):
+    #tp number of cases containing the word
+    #fp number of negative cases containing the word
+    #tn number of cases not containing the word
+    #fn number of negative cases not containing the word
+    tp = 0.0 #class_count[tag][word]
+    fp = 0.0 #class_count[*-tag][word]
+    tn = 0.0 #class_count[tag][*-word]
+    fn = 0.0 #class_count[*-tag][*-word]
+
+    for classname,termdict in class_count.items():
+        for term,p_t in termdict.items():
+            if classname == tag:
+                if term == word:
+                    tp = tp + p_t
+                else:
+                    tn = tn + p_t
+            else:
+                if term == word:
+                    fp = fp + p_t
+                else:
+                    fn = fn + p_t
+
+    return [tp,fp,tn,fn]
 
 
 twitterdir = './filtered/'
@@ -478,7 +552,19 @@ def classify_io(folder,i,hashtags,terms_set):
 idf = computeidf(corpus_count,cl_c)
 for i in range(1,25,5):     
     #    if True:
-    try:     
+    try:
+        print 'bns'
+        terms_set = compute_bns(i,cl_c)
+        classify_io("/home/phi/twitter/bns/",i,hashtags,terms_set) 
+
+        print 'f1'
+        terms_set = compute_f1(i,cl_c)
+        classify_io("/home/phi/twitter/f1/",i,hashtags,terms_set) 
+
+        print 'acc2'
+        terms_set = compute_acc2(i,cl_c)
+        classify_io("/home/phi/twitter/acc2/",i,hashtags,terms_set) 
+     
         print 'ktfidf'
         terms_set= compute_ktfidf_terms(i,cl_c,idf)
         classify_io("/home/phi/twitter/ktfidf/",i,hashtags,terms_set) 
@@ -494,7 +580,7 @@ for i in range(1,25,5):
         print 'mut inf'
         terms_set = compute_positive_mutual_information(i,cl_c,corpus_count,hashtags)
         classify_io("/home/phi/twitter/pos_mut_info/",i,hashtags,terms_set) 
-
+        
     except Exception, err:
         print str(err)
 
