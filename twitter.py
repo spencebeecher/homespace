@@ -475,7 +475,7 @@ def compute_tp_fp_tn_fn(tag,word,class_count):
     return [tp,fp,tn,fn]
 
 
-twitterdir = './filtered/'
+twitterdir = '/media/My Passport/twitterdata/'
 hashtags = dict()
 
 if False:
@@ -494,14 +494,15 @@ for x in tags:
     del hashtags[x[0]]
 
 
-tags = sorted([(x,v) for (x,v) in hashtags.items()], key=itemgetter(1))[-80:]
+tags = sorted([(x,v) for (x,v) in hashtags.items()], key=itemgetter(1))[-60:]
 for x in tags:
     del hashtags[x[0]]
 
+print "num hashtags %d" % len(hashtags)
 filtered = '/home/phi/twitter/filtered/myout.json'
 filteredPath = '/home/phi/twitter/filtered/'
 
-if False:
+if True:
     with open(filtered,'w') as f:
         print "writing to %s" % filtered
         loop_tweets(filter_hashtags,[f,hashtags],twitterdir)
@@ -509,7 +510,7 @@ if False:
 print 'getting ready to corpus count'    
 corpus_count = dict()
 
-if False:
+if True:
     loop_tweets(term_count,corpus_count,filteredPath)
     print 'counted words in corpus'
     print "%d\n" % len(corpus_count)
@@ -523,7 +524,7 @@ c = sorted([(x,v) for (x,v) in corpus_count.items() if v < 100], key=itemgetter(
 for x in c:
     del corpus_count[x[0]]
 terms_set = set()
-if False: 
+if True: 
     cl_c = dict()
     loop_tweets(class_count,[cl_c,hashtags,corpus_count],filteredPath)
     print 'looped tweets'
@@ -550,7 +551,7 @@ def classify_io(folder,i,hashtags,terms_set):
      
 
 idf = computeidf(corpus_count,cl_c)
-for i in range(1,25,5):     
+for i in range(1,40,5):     
     #    if True:
     try:
         print 'bns'
@@ -577,9 +578,9 @@ for i in range(1,25,5):
         terms_set = compute_global_tfidf(i*len(hashtags),cl_c,corpus_count,idf)
         classify_io("/home/phi/twitter/global_tfidf/",i,hashtags,terms_set) 
     
-        print 'mut inf'
-        terms_set = compute_positive_mutual_information(i,cl_c,corpus_count,hashtags)
-        classify_io("/home/phi/twitter/pos_mut_info/",i,hashtags,terms_set) 
+#        print 'mut inf'
+#        terms_set = compute_positive_mutual_information(i,cl_c,corpus_count,hashtags)
+#        classify_io("/home/phi/twitter/pos_mut_info/",i,hashtags,terms_set) 
         
     except Exception, err:
         print str(err)
