@@ -65,6 +65,9 @@ tfidf= get_series(tfidf)
 tf= get_series(tf)
     #error =  [0.3497             , 0.3108]
     
+import matplotlib.pyplot as plt
+fig = matplotlib.pyplot.figure()
+
 matplotlib.pyplot.plot(f1[0],f1[1], label='f1', linewidth=2)
 matplotlib.pyplot.plot(acc2[0],acc2[1], label='acc2', linewidth=2)
 matplotlib.pyplot.plot(gtfidf[0],gtfidf[1], label='gtfidf', linewidth=2)
@@ -72,6 +75,9 @@ matplotlib.pyplot.plot(bns[0],bns[1], label='bns', linewidth=2)
 matplotlib.pyplot.plot(tfidf[0],tfidf[1], label='tfidf', linewidth=2)
 matplotlib.pyplot.plot(tf[0],tf[1], label='tf', linewidth=2)
 matplotlib.pyplot.legend(('f1','acc2','gtfidf','bns','tfidf','tf'))
+ax1 = fig.add_subplot(111)
+ax1.set_ylabel('Percent Correct')
+ax1.set_xlabel('Feature Vector Size')
 matplotlib.pyplot.suptitle("Percent Correct of NB vs Feature Vector Size (20 Classes)", fontsize='20')
 #    xlocations = na.array(range(len(data)))+0.5
 #    width = 0.5
